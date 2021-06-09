@@ -4,14 +4,12 @@ namespace App\Conversations;
 
 use App\Repositories\CityRepository;
 use App\Repositories\UserRepository;
-use BotMan\BotMan\BotMan;
 use BotMan\BotMan\Messages\Conversations\Conversation;
 use BotMan\BotMan\Messages\Incoming\Answer;
 use BotMan\Drivers\Telegram\Extensions\Keyboard;
 use BotMan\Drivers\Telegram\Extensions\KeyboardButton;
-use Illuminate\Support\Facades\App;
 
-class RegisterConversation extends Conversation
+class RegisterConversation extends CoreConversation
 {
     /**
      * Start the conversation.
@@ -32,9 +30,13 @@ class RegisterConversation extends Conversation
         $this->cityRepository = app(CityRepository::class);
     }
 
+    public function setLang()
+    {
+        app()->setLocale($this->lang);
+    }
+
     public function collectUserInfo()
     {
-        $data = [];
         $user_info = $this->bot->getUser()->getInfo();
         $data = $user_info['user'];
         $data['telegram_id'] = $data['id'];
@@ -52,7 +54,7 @@ class RegisterConversation extends Conversation
         $this->telegram_id = $this->bot->getUser()->getId();
         $is_registered = $this->userRepository->getUser($this->telegram_id);
         if ($is_registered) {
-            $this->askMain();
+            $this->bot->startConversation(new MenuConversation());
         } else {
             $this->askLang();
         }
@@ -62,10 +64,8 @@ class RegisterConversation extends Conversation
     public function askLang()
     {
         $text = "Здравствуйте! Давайте для начала выберем язык обслуживания!\n\nKeling, avvaliga xizmat ko’rsatish tilini tanlab olaylik.\n\nHi! Let's first we choose language of serving!";
-
         $this->ask($text, function (Answer $answer) {
             $lang = $answer->getText();
-            App::setLocale($this->lang);
             switch ($lang) {
                 case "🇺🇿 O'zbekcha":
                     $this->lang = 'uz';
@@ -77,9 +77,8 @@ class RegisterConversation extends Conversation
                     $this->lang = 'en';
                     break;
             }
-            $this->say($this->lang);
-            $messageAfterRegistration = "Les Ailes O’zbekiston muhlislarining inoq oilasiga xush kelibsiz!\nEndi esa sizga sodda va ko’p vaqt olmaydigan ro’yhatdan o’tish jarayonini taklif etamiz";
-            $this->say($messageAfterRegistration);
+            $this->setLang();
+            $this->say(__('telegram.afterSelectLang'));
             $this->askContact();
         },
             Keyboard::create()
@@ -98,24 +97,22 @@ class RegisterConversation extends Conversation
 
     public function askContact()
     {
-        App::setLocale($this->lang);
-        $messageForContact = '📱 Telefon raqamingiz qanday? Telefon raqamingizni jo\'natish uchun, quyidagi "📱 Raqamimni jo\'natish" tugmasini bosing.';
-        $this->ask($messageForContact, function (Answer $answer) {
+        $this->ask(__('telegram.askForContact'), function (Answer $answer) {
             $this->phone_number = $answer->getMessage()->getContact()->getPhoneNumber();
-            $this->say(print_r($this->phone_number, true));
+//            $this->say(print_r($this->phone_number, true));
+            $this->setLang();
             $this->askCity();
         },
             Keyboard::create(Keyboard::TYPE_KEYBOARD)
                 ->oneTimeKeyboard()
                 ->resizeKeyboard()
-                ->addRow(KeyboardButton::create('Raqamni jo\'natish?')->requestContact())
+                ->addRow(KeyboardButton::create(__('telegram.askForContactButton'))->requestContact())
                 ->toArray()
         );
     }
 
     public function askCity()
     {
-        App::setLocale($this->lang);
         $keyboard = Keyboard::create(Keyboard::TYPE_KEYBOARD);
         $keyboard->oneTimeKeyboard()->resizeKeyboard();
         $citiesPairs = $this->cityRepository->getCities($this->lang)->chunk(2);
@@ -127,35 +124,18 @@ class RegisterConversation extends Conversation
             call_user_func_array([$keyboard, 'addRow'], $keyboards);
         }
 
-        $this->ask("Siz qaysi shaharda istiqomat qilasiz?", function (Answer $answer) {
-            $au = App::getLocale();
-            $this->say(print_r($au, true));
+        $this->ask(__('telegram.askCity'), function (Answer $answer) {
+            $this->setLang();
+//            $this->say(__('telegram.welcome'));
             $this->city = $answer->getText();
             $this->user_info = $this->collectUserInfo();
-            $this->say(print_r($this->user_info, true));
+//            $this->say(print_r($this->user_info, true));
 
             $this->userRepository->addUser($this->user_info);
-            $this->askMain();
+            $this->bot->startConversation(new MenuConversation());
         }, $keyboard->toArray());
 
 
-    }
-
-    public function askMain()
-    {
-        $this->ask("Juda yaxshi! Birgalikda buyurtma beramizmi? 😃", function (Answer $answer) {
-//            $this->
-        },
-            Keyboard::create(Keyboard::TYPE_KEYBOARD)
-                ->oneTimeKeyboard()
-                ->resizeKeyboard()
-                ->addRow(KeyboardButton::create('🛍 Buyurtma bering'))
-                ->addRow(
-                    KeyboardButton::create('✍ Fikrni bildirish'),
-                    KeyboardButton::create('⚙ Sozlanmalar')
-                )
-                ->toArray()
-        );
     }
 
     public function run()

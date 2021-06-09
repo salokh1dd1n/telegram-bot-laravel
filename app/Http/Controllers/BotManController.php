@@ -14,11 +14,12 @@ class BotManController extends Controller
 {
 
     protected $city;
+    protected $userRepository;
 
     public function __construct()
     {
         $this->city = app(CityRepository::class);
-        $this->user = app(UserRepository::class);
+        $this->userRepository = app(UserRepository::class);
     }
 
     /**
@@ -37,6 +38,8 @@ class BotManController extends Controller
      */
     public function tinker()
     {
+        $lang = $this->userRepository->getLang('1431792739');
+        dd($lang);
         return view('tinker');
     }
 
@@ -57,5 +60,6 @@ class BotManController extends Controller
     public function settingsConversation(BotMan $bot)
     {
         $bot->startConversation(new RegisterConversation());
+
     }
 }
